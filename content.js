@@ -1,9 +1,12 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "extract") {
+    console.log("Extracting images...");
     const images = Array.from(document.querySelectorAll('img.preso-view.page-view'));
     const dataUrls = images.map(img => img.dataset.url).sort();
     
     fetchImages(dataUrls);
+  } else {
+    console.log("Received unknown action:", request.action);
   }
 });
 

@@ -30,11 +30,19 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    #errorMessage {
+      display: none;
+      color: red;
+      margin-top: 10px;
+      text-align: center;
+      max-width: 180px;
+    }
   </style>
 </head>
 <body>
   <button id="extractButton">Extract Images</button>
   <div id="loader"></div>
+  <div id="errorMessage"></div>
   <script src="popup.js"></script>
 </body>
 </html>
