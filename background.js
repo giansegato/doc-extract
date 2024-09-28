@@ -2,44 +2,45 @@ importScripts("jspdf.umd.min.js");
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "processUrls") {
-    console.log("Received processUrls request with URLs:", request.urls);
+    sendLogToPopup("Received processUrls request with URLs:", request.urls);
     processUrls(request.urls);
   }
 });
 
 async function processUrls(urls) {
-  console.log("Starting to process URLs:", urls);
-  // temporarily only run this on the first 2 urls
-  urls = urls.slice(0, 2);
+  sendLogToPopup("Starting to process URLs.");
+
   try {
-    console.log("Downloading images...");
-    const imageBlobs = await Promise.all(urls.map(downloadImage));
-    console.log("All images downloaded. Number of blobs:", imageBlobs.length);
+    const imageData = await Promise.all(urls.map(async (url, index) => {
+      const blob = await downloadImage(url);
+      return { blob, index };
+    }));
+    sendLogToPopup("All images downloaded. Number of images:", imageData.length);
 
-    console.log("Creating PDF from images...");
-    const pdfBlob = await createPDFFromImages(imageBlobs);
-    console.log("PDF created successfully. Blob size:", pdfBlob.size);
+    sendLogToPopup("Creating PDF from images...");
+    const pdfBlob = await createPDFFromImages(imageData);
+    sendLogToPopup("PDF created successfully. Blob size:", pdfBlob.size);
 
-    console.log("Initiating PDF download...");
+    sendLogToPopup("Initiating PDF download...");
     await downloadPDF(pdfBlob);
-    console.log("PDF download initiated.");
+    sendLogToPopup("PDF download initiated.");
 
     // Send processingComplete message to popup
     chrome.runtime.sendMessage({ action: "processingComplete" });
-    console.log("Sent processingComplete message.");
+    sendLogToPopup("Sent processingComplete message.");
   } catch (error) {
-    console.error("Error processing URLs:", error);
+    sendLogToPopup("Error processing URLs:", error);
     // Send processingError message to popup
     chrome.runtime.sendMessage({
       action: "processingError",
       error: error.message,
     });
-    console.log("Sent processingError message.");
+    sendLogToPopup("Sent processingError message.");
   }
 }
 
 async function downloadImage(url) {
-  console.log("Downloading image from URL:", url);
+  sendLogToPopup("Downloading image from URL:", url);
   const headers = {
     Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
@@ -58,7 +59,7 @@ async function downloadImage(url) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const blob = await response.blob();
-    console.log("Image downloaded successfully. Blob size:", blob.size);
+    sendLogToPopup("Image downloaded successfully. Blob size:", blob.size);
     return blob;
   } catch (error) {
     console.error("Error downloading image:", error);
@@ -66,11 +67,14 @@ async function downloadImage(url) {
   }
 }
 
-async function createPDFFromImages(imageBlobs) {
-  console.log("Starting PDF creation with", imageBlobs.length, "images");
+async function createPDFFromImages(imageData) {
+  sendLogToPopup("Starting PDF creation with", imageData.length, "images");
+
+  // Sort the imageData array based on the original index
+  imageData.sort((a, b) => a.index - b.index);
 
   // Get dimensions of the first image to set PDF size
-  const firstImageDimensions = await getImageDimensions(imageBlobs[0]);
+  const firstImageDimensions = await getImageDimensions(imageData[0].blob);
   const pdfWidth = firstImageDimensions.width;
   const pdfHeight = firstImageDimensions.height;
 
@@ -80,11 +84,11 @@ async function createPDFFromImages(imageBlobs) {
     format: [pdfWidth, pdfHeight],
   });
 
-  for (let i = 0; i < imageBlobs.length; i++) {
-    console.log(`Processing image ${i + 1} of ${imageBlobs.length}`);
+  for (let i = 0; i < imageData.length; i++) {
+    sendLogToPopup(`Processing image ${i + 1} of ${imageData.length}`);
     try {
-      let imgData = await blobToBase64(imageBlobs[i]);
-      console.log(`Image ${i + 1} converted to base64`);
+      let imgData = await blobToBase64(imageData[i].blob);
+      sendLogToPopup(`Image ${i + 1} converted to base64`);
 
       // Ensure the correct MIME type
       imgData = imgData.replace(
@@ -93,13 +97,13 @@ async function createPDFFromImages(imageBlobs) {
       );
 
       if (i > 0) {
-        console.log(`Adding new page for image ${i + 1}`);
+        sendLogToPopup(`Adding new page for image ${i + 1}`);
         pdf.addPage();
       }
 
       // Get image dimensions using createImageBitmap
-      const dimensions = await getImageDimensions(imageBlobs[i]);
-      console.log(`Image ${i + 1} dimensions:`, dimensions);
+      const dimensions = await getImageDimensions(imageData[i].blob);
+      sendLogToPopup(`Image ${i + 1} dimensions:`, dimensions);
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -119,13 +123,13 @@ async function createPDFFromImages(imageBlobs) {
       const y = (pdfHeight - renderHeight) / 2;
 
       pdf.addImage(imgData, "JPEG", x, y, renderWidth, renderHeight);
-      console.log(`Image ${i + 1} added to PDF`);
+      sendLogToPopup(`Image ${i + 1} added to PDF`);
     } catch (error) {
       console.error(`Error adding image ${i + 1} to PDF:`, error);
     }
   }
 
-  console.log("PDF creation complete");
+  sendLogToPopup("PDF creation complete");
   return pdf.output("blob");
 }
 
@@ -147,11 +151,11 @@ function blobToBase64(blob) {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64data = reader.result;
-      console.log(
+      sendLogToPopup(
         "Blob converted to base64. Result length:",
         base64data.length
       );
-      console.log("Base64 data starts with:", base64data.substring(0, 50));
+      sendLogToPopup("Base64 data starts with:", base64data.substring(0, 50));
       resolve(base64data);
     };
     reader.onerror = (error) => {
@@ -169,7 +173,7 @@ async function getImageType(blob) {
     const hexHeader = Array.from(header)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-    console.log("Image header (hex):", hexHeader);
+    sendLogToPopup("Image header (hex):", hexHeader);
 
     switch (hexHeader) {
       case "89504e47":
@@ -194,7 +198,7 @@ async function downloadPDF(pdfBlob) {
     const reader = new FileReader();
     reader.onloadend = function () {
       const base64data = reader.result;
-      console.log("PDF converted to base64 for download");
+      sendLogToPopup("PDF converted to base64 for download");
       chrome.downloads.download(
         {
           url: base64data,
@@ -209,7 +213,7 @@ async function downloadPDF(pdfBlob) {
             );
             reject(chrome.runtime.lastError);
           } else {
-            console.log("Download initiated with ID:", downloadId);
+            sendLogToPopup("Download initiated with ID:", downloadId);
             resolve();
           }
         }
@@ -221,4 +225,10 @@ async function downloadPDF(pdfBlob) {
     };
     reader.readAsDataURL(pdfBlob);
   });
+}
+
+function sendLogToPopup(message, ...args) {
+  const msg = message + " " + args.join(" ");
+  console.log("Sending log to popup:", msg);
+  chrome.runtime.sendMessage({ type: "log", content: msg });
 }

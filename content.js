@@ -1,10 +1,12 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "extract") {
-    console.log("Extracting images...");
+    sendLogToPopup("Extracting images...");
     const images = Array.from(document.querySelectorAll('img.preso-view.page-view'));
-    const dataUrls = images.map(img => img.dataset.url).sort();
+    const dataUrls = images.map(img => img.dataset.url);
+    sendLogToPopup("Found " + dataUrls.length + " images");
     
     fetchImages(dataUrls);
+    sendLogToPopup("Fetching images...");
   } else {
     console.log("Received unknown action:", request.action);
   }
@@ -27,4 +29,10 @@ async function fetchImages(urls) {
   
   // Send the directUrls to the background script
   chrome.runtime.sendMessage({ action: "processUrls", urls: directUrls });
+}
+
+function sendLogToPopup(message, ...args) {
+  const msg = message + " " + args.join(" ");
+  console.log("Sending log to popup:", msg);
+  chrome.runtime.sendMessage({ type: "log", content: msg });
 }

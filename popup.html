@@ -1,30 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocSend Image Extractor</title>
   <style>
     body {
-      width: 200px;
-      height: 200px;
+      width: 300px;
+      height: 400px;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
     }
-    button {
-      width: 150px;
-      height: 150px;
+    h1 {
       font-size: 18px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    button {
+      width: 200px;
+      height: 50px;
+      font-size: 16px;
       cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
     }
     #loader {
       display: none;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #3498db;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      width: 20px;
+      height: 20px;
       animation: spin 1s linear infinite;
-      margin-top: 10px;
+      margin-top: 20px;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
@@ -32,17 +51,31 @@
     }
     #errorMessage {
       display: none;
-      color: red;
+      color: #d32f2f;
       margin-top: 10px;
       text-align: center;
-      max-width: 180px;
+      max-width: 250px;
+    }
+    #logArea {
+      width: 100%;
+      height: 200px;
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: #666;
     }
   </style>
 </head>
 <body>
-  <button id="extractButton">Extract Images</button>
+  <h1>DocSend Document Extractor</h1>
+  <button id="extractButton">Extract PDF</button>
   <div id="loader"></div>
   <div id="errorMessage"></div>
+  <div id="logArea"></div>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Image Extractor",
+    "name": "DocSend PDF Extractor",
     "version": "1.0",
-    "description": "Extracts images from pages with specific class and creates a PDF",
+    "description": "Extracts images from DocSend pages and creates a PDF",
     "permissions": [
       "activeTab",
       "scripting",
