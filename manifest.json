@@ -10,7 +10,8 @@
     ],
     "host_permissions": [
       "https://docsend.com/view/*",
-      "https://*.s3.amazonaws.com/*"
+      "https://*.s3.amazonaws.com/*",
+      "https://*.cloudfront.net/*"
     ],
     "action": {
       "default_popup": "popup.html"
