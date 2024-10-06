@@ -3,19 +3,35 @@ importScripts("jspdf.umd.min.js");
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "processUrls") {
     sendLogToPopup("Received processUrls request with URLs:", request.urls);
-    processUrls(request.urls);
+    (async () => {
+      try {
+        await processUrls(request.urls);
+      } catch (error) {
+        sendLogToPopup("Error in processUrls:", error);
+        chrome.runtime.sendMessage({
+          action: "processingError",
+          error: error.message,
+        });
+      }
+    })();
   }
+  return true; // Indicates that the response is sent asynchronously
 });
 
 async function processUrls(urls) {
   sendLogToPopup("Starting to process URLs.");
 
   try {
-    const imageData = await Promise.all(urls.map(async (url, index) => {
-      const blob = await downloadImage(url);
-      return { blob, index };
-    }));
-    sendLogToPopup("All images downloaded. Number of images:", imageData.length);
+    const imageData = await Promise.all(
+      urls.map(async (url, index) => {
+        const blob = await downloadImage(url);
+        return { blob, index };
+      })
+    );
+    sendLogToPopup(
+      "All images downloaded. Number of images:",
+      imageData.length
+    );
 
     sendLogToPopup("Creating PDF from images...");
     const pdfBlob = await createPDFFromImages(imageData);
@@ -29,6 +45,9 @@ async function processUrls(urls) {
     chrome.runtime.sendMessage({ action: "processingComplete" });
     sendLogToPopup("Sent processingComplete message.");
   } catch (error) {
+    if (error instanceof Error) {
+      console.error(error.stack);
+    }
     sendLogToPopup("Error processing URLs:", error);
     // Send processingError message to popup
     chrome.runtime.sendMessage({
@@ -67,6 +86,34 @@ async function downloadImage(url) {
   }
 }
 
+async function extractTextFromImage(imageData) {
+  try {
+    const response = await fetch(
+      "https://giansegato--ocr-function-extract-text.modal.run",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image_data: imageData }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (result.error) {
+      throw new Error(`OCR Error: ${result.error}`);
+    }
+    return result.text;
+  } catch (error) {
+    console.error("Error calling Modal function:", error);
+    throw error;
+  }
+}
+
 async function createPDFFromImages(imageData) {
   sendLogToPopup("Starting PDF creation with", imageData.length, "images");
 
@@ -86,44 +133,58 @@ async function createPDFFromImages(imageData) {
 
   for (let i = 0; i < imageData.length; i++) {
     sendLogToPopup(`Processing image ${i + 1} of ${imageData.length}`);
+    // try {
+    let imgData = await blobToBase64(imageData[i].blob);
+    sendLogToPopup(`Image ${i + 1} converted to base64`);
+
+    // Ensure the correct MIME type
+    imgData = imgData.replace(
+      "data:application/octet-stream;base64,",
+      "data:image/jpeg;base64,"
+    );
+
+    if (i > 0) {
+      sendLogToPopup(`Adding new page for image ${i + 1}`);
+      pdf.addPage();
+    }
+
+    // Get image dimensions using createImageBitmap
+    const dimensions = await getImageDimensions(imageData[i].blob);
+    sendLogToPopup(`Image ${i + 1} dimensions:`, dimensions);
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgAspectRatio = dimensions.width / dimensions.height;
+    const pdfAspectRatio = pdfWidth / pdfHeight;
+
+    let renderWidth, renderHeight;
+    if (imgAspectRatio > pdfAspectRatio) {
+      renderWidth = pdfWidth;
+      renderHeight = pdfWidth / imgAspectRatio;
+    } else {
+      renderHeight = pdfHeight;
+      renderWidth = pdfHeight * imgAspectRatio;
+    }
+
+    const x = (pdfWidth - renderWidth) / 2;
+    const y = (pdfHeight - renderHeight) / 2;
+
+    pdf.addImage(imgData, "JPEG", x, y, renderWidth, renderHeight);
+    sendLogToPopup(`Image ${i + 1} added to PDF`);
+
     try {
-      let imgData = await blobToBase64(imageData[i].blob);
-      sendLogToPopup(`Image ${i + 1} converted to base64`);
+      const text = await extractTextFromImage(imgData);
+      sendLogToPopup(`OCR text extracted for image ${i + 1}`);
 
-      // Ensure the correct MIME type
-      imgData = imgData.replace(
-        "data:application/octet-stream;base64,",
-        "data:image/jpeg;base64,"
-      );
+      pdf.setFontSize(1);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(text, 0, 10, {
+        maxWidth: pdfWidth,
+        align: "left",
+        opacity: 1,
+      });
 
-      if (i > 0) {
-        sendLogToPopup(`Adding new page for image ${i + 1}`);
-        pdf.addPage();
-      }
-
-      // Get image dimensions using createImageBitmap
-      const dimensions = await getImageDimensions(imageData[i].blob);
-      sendLogToPopup(`Image ${i + 1} dimensions:`, dimensions);
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgAspectRatio = dimensions.width / dimensions.height;
-      const pdfAspectRatio = pdfWidth / pdfHeight;
-
-      let renderWidth, renderHeight;
-      if (imgAspectRatio > pdfAspectRatio) {
-        renderWidth = pdfWidth;
-        renderHeight = pdfWidth / imgAspectRatio;
-      } else {
-        renderHeight = pdfHeight;
-        renderWidth = pdfHeight * imgAspectRatio;
-      }
-
-      const x = (pdfWidth - renderWidth) / 2;
-      const y = (pdfHeight - renderHeight) / 2;
-
-      pdf.addImage(imgData, "JPEG", x, y, renderWidth, renderHeight);
-      sendLogToPopup(`Image ${i + 1} added to PDF`);
+      sendLogToPopup(`OCR text embedded in PDF for image ${i + 1}`);
     } catch (error) {
       console.error(`Error adding image ${i + 1} to PDF:`, error);
     }

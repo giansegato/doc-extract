@@ -1,28 +1,33 @@
 {
-    "manifest_version": 3,
-    "name": "DocSend PDF Extractor",
-    "version": "1.0",
-    "description": "Extracts images from DocSend pages and creates a PDF",
-    "permissions": [
-      "activeTab",
-      "scripting",
-      "downloads"
-    ],
-    "host_permissions": [
-      "https://docsend.com/view/*",
-      "https://*.s3.amazonaws.com/*",
-      "https://*.cloudfront.net/*"
-    ],
-    "action": {
-      "default_popup": "popup.html"
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://docsend.com/view/*"],
-        "js": ["content.js"]
-      }
-    ],
-    "background": {
-      "service_worker": "background.js"
+  "manifest_version": 3,
+  "name": "DocSend PDF Extractor",
+  "version": "1.0",
+  "description": "Extracts images from DocSend pages and creates a PDF",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://docsend.com/view/*",
+    "https://*.s3.amazonaws.com/*",
+    "https://*.cloudfront.net/*",
+    "https://giansegato--ocr-function-extract-text.modal.run/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docsend.com/view/*"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
+  ],
+  "background": {
+    "service_worker": "background.js"
   }
+}

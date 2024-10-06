@@ -1,10 +1,12 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "extract") {
     sendLogToPopup("Extracting images...");
-    const images = Array.from(document.querySelectorAll('img.preso-view.page-view'));
-    const dataUrls = images.map(img => img.dataset.url);
+    const images = Array.from(
+      document.querySelectorAll("img.preso-view.page-view")
+    );
+    const dataUrls = images.map((img) => img.dataset.url);
     sendLogToPopup("Found " + dataUrls.length + " images");
-    
+
     fetchImages(dataUrls);
     sendLogToPopup("Fetching images...");
   } else {
@@ -14,10 +16,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function fetchImages(urls) {
   const directUrls = [];
-  
+
   for (const url of urls) {
     try {
-      const response = await fetch(url, { credentials: 'include' });
+      const response = await fetch(url, { credentials: "include" });
       const data = await response.json();
       if (data.directImageUrl) {
         directUrls.push(data.directImageUrl);
@@ -26,7 +28,7 @@ async function fetchImages(urls) {
       console.error(`Error fetching ${url}:`, error);
     }
   }
-  
+
   // Send the directUrls to the background script
   chrome.runtime.sendMessage({ action: "processUrls", urls: directUrls });
 }
