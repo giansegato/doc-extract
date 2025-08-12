@@ -1,5 +1,13 @@
 importScripts("jspdf.umd.min.js");
 
+// Global state for collecting image blobs
+let pdfState = {
+  totalPages: 0,
+  receivedPages: 0,
+  imageBlobs: [],
+  isProcessing: false
+};
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "processUrls") {
     sendLogToPopup("Received processUrls request with URLs:", request.urls);
@@ -14,9 +22,96 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       }
     })();
+  } else if (request.action === "initializePDF") {
+    sendLogToPopup("Initializing PDF processing for", request.totalPages, "pages");
+    pdfState = {
+      totalPages: request.totalPages,
+      receivedPages: 0,
+      imageBlobs: new Array(request.totalPages),
+      isProcessing: true
+    };
+  } else if (request.action === "processImageBlob") {
+    sendLogToPopup(`Received blob for page ${request.pageNum} (index ${request.pageIndex})`);
+    
+    // Convert base64 back to blob
+    const base64Data = request.base64Data.split(',')[1];
+    const mimeType = request.base64Data.split(',')[0].split(':')[1].split(';')[0];
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    
+    // Store in correct position
+    pdfState.imageBlobs[request.pageIndex] = { blob, index: request.pageIndex };
+    pdfState.receivedPages++;
+    
+    sendLogToPopup(`Stored page ${request.pageNum}, total received: ${pdfState.receivedPages}/${pdfState.totalPages}`);
+  } else if (request.action === "pageError") {
+    sendLogToPopup(`Error on page ${request.pageNum}: ${request.error}`);
+    pdfState.receivedPages++;
+    // Leave the slot empty for this page
+  } else if (request.action === "allPagesProcessed") {
+    sendLogToPopup("All pages processed, creating PDF...");
+    (async () => {
+      try {
+        await createPDFFromCollectedBlobs();
+      } catch (error) {
+        sendLogToPopup("Error creating PDF:", error);
+        chrome.runtime.sendMessage({
+          action: "processingError",
+          error: error.message,
+        });
+      }
+    })();
   }
   return true; // Indicates that the response is sent asynchronously
 });
+
+async function createPDFFromCollectedBlobs() {
+  try {
+    // Filter out any empty slots (failed pages)
+    const validImageData = pdfState.imageBlobs.filter(item => item && item.blob);
+    
+    sendLogToPopup(
+      "Creating PDF from collected blobs. Valid images:",
+      validImageData.length, "out of", pdfState.totalPages
+    );
+
+    if (validImageData.length === 0) {
+      throw new Error("No valid images to create PDF");
+    }
+
+    const pdfBlob = await createPDFFromImages(validImageData);
+    sendLogToPopup("PDF created successfully. Blob size:", pdfBlob.size);
+
+    sendLogToPopup("Initiating PDF download...");
+    await downloadPDF(pdfBlob);
+    sendLogToPopup("PDF download initiated.");
+
+    // Send processingComplete message to popup
+    chrome.runtime.sendMessage({ action: "processingComplete" });
+    sendLogToPopup("Sent processingComplete message.");
+    
+    // Reset state
+    pdfState = { totalPages: 0, receivedPages: 0, imageBlobs: [], isProcessing: false };
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(error.stack);
+    }
+    sendLogToPopup("Error creating PDF from collected blobs:", error);
+    chrome.runtime.sendMessage({
+      action: "processingError",
+      error: error.message,
+    });
+    sendLogToPopup("Sent processingError message.");
+    
+    // Reset state on error
+    pdfState = { totalPages: 0, receivedPages: 0, imageBlobs: [], isProcessing: false };
+  }
+}
 
 async function processUrls(urls) {
   sendLogToPopup("Starting to process URLs.");
