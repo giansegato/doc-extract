@@ -61,15 +61,10 @@ async function processUrls(urls) {
 async function downloadImage(url) {
   sendLogToPopup("Downloading image from URL:", url);
   const headers = {
-    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    Connection: "keep-alive",
-    DNT: "1",
-    "Sec-Fetch-Dest": "image",
-    "Sec-Fetch-Mode": "no-cors",
-    "Sec-Fetch-Site": "cross-site",
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+    "dnt": "1",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
   };
 
   try {
@@ -137,11 +132,10 @@ async function createPDFFromImages(imageData) {
     let imgData = await blobToBase64(imageData[i].blob);
     sendLogToPopup(`Image ${i + 1} converted to base64`);
 
-    // Ensure the correct MIME type
-    imgData = imgData.replace(
-      "data:application/octet-stream;base64,",
-      "data:image/jpeg;base64,"
-    );
+    // Fix MIME type based on actual image format
+    const detectedType = await getImageType(imageData[i].blob);
+    const correctMimeType = detectedType === "PNG" ? "image/png" : "image/jpeg";
+    imgData = imgData.replace(/data:[^;]+;base64,/, `data:${correctMimeType};base64,`);
 
     if (i > 0) {
       sendLogToPopup(`Adding new page for image ${i + 1}`);
@@ -169,7 +163,12 @@ async function createPDFFromImages(imageData) {
     const x = (pdfWidth - renderWidth) / 2;
     const y = (pdfHeight - renderHeight) / 2;
 
-    pdf.addImage(imgData, "JPEG", x, y, renderWidth, renderHeight);
+    // Detect actual image type instead of assuming JPEG
+    const imageType = await getImageType(imageData[i].blob);
+    const format = imageType || "JPEG"; // fallback to JPEG if detection fails
+    sendLogToPopup(`Image ${i + 1} format detected: ${format}`);
+
+    pdf.addImage(imgData, format, x, y, renderWidth, renderHeight);
     sendLogToPopup(`Image ${i + 1} added to PDF`);
 
     try {
@@ -186,6 +185,11 @@ async function createPDFFromImages(imageData) {
 
       sendLogToPopup(`OCR text embedded in PDF for image ${i + 1}`);
     } catch (error) {
+      sendLogToPopup(`OCR failed for image ${i + 1}: Modal service not available`);
+      chrome.runtime.sendMessage({
+        action: "modalError",
+        message: "Modal OCR service not available - PDF will be created without text extraction"
+      });
       console.error(`Error adding image ${i + 1} to PDF:`, error);
     }
   }

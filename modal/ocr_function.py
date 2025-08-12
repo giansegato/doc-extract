@@ -1,13 +1,12 @@
 import modal
-from fastapi import Body
 from pydantic import BaseModel
 
 app = modal.App("ocr_function")
 
 image = (
-    modal.Image.debian_slim()
+    modal.Image.debian_slim(python_version="3.12")
     .apt_install("tesseract-ocr")
-    .pip_install("Pillow", "pytesseract")
+    .pip_install("Pillow", "pytesseract", "fastapi")
 )
 
 
@@ -16,7 +15,7 @@ class ImageData(BaseModel):
 
 
 @app.function(image=image)
-@modal.web_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST")
 async def extract_text(data: ImageData):
     import base64
     import pytesseract
